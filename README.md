@@ -29,8 +29,8 @@ Python, Apache Kafka, Apache Spark 3.5 (PySpark Structured Streaming), Apache Ic
 
 ## Setup
 ```bash
-git clone https://github.com/Aswinak8866/real-time-streaming-pipeline.git
-cd real-time-streaming-pipeline
+git clone https://github.com/Aswinak8866/real-streaming-data-pipeline.git
+cd real-streaming-data-pipeline
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt   # installs kafka-python for the producer
 ```
