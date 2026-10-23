@@ -1,6 +1,22 @@
+# python
 venv/
+.venv/
 __pycache__/
 *.pyc
+
+# spark / iceberg local output
+spark-warehouse/
+metastore_db/
+derby.log
+checkpoint*/
+*.parquet
+
+# logs and backups
 *.log
-.idea/
-.vscode/
+*.bak
+*.bak_*
+
+# secrets
+.env
+*.key
+*.pem

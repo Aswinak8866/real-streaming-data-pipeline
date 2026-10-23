@@ -2,11 +2,19 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StringType, DoubleType
 
+KAFKA_SERVERS = "localhost:9092"
+TOPIC = "ecommerce-events"
+WAREHOUSE = "hdfs://localhost:9000/user/vboxuser/iceberg"
+CHECKPOINT = "hdfs://localhost:9000/user/vboxuser/iceberg_checkpoint"
+TABLE = "local.ecommerce.events"
+
 spark = SparkSession.builder \
     .appName("KafkaSparkIcebergStreaming") \
+    .config("spark.sql.extensions",
+            "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \
     .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog") \
     .config("spark.sql.catalog.local.type", "hadoop") \
-    .config("spark.sql.catalog.local.warehouse", "hdfs://localhost:9000/user/vboxuser/iceberg") \
+    .config("spark.sql.catalog.local.warehouse", WAREHOUSE) \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
@@ -21,22 +29,18 @@ schema = StructType() \
 
 df = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
-    .option("subscribe", "ecommerce-events") \
+    .option("kafka.bootstrap.servers", KAFKA_SERVERS) \
+    .option("subscribe", TOPIC) \
     .option("startingOffsets", "latest") \
     .load()
 
-json_df = df.selectExpr(
-    "CAST(value AS STRING) AS json"
-)
+parsed_df = df.selectExpr("CAST(value AS STRING) AS json") \
+    .select(from_json(col("json"), schema).alias("data")) \
+    .select("data.*")
 
-parsed_df = json_df.select(
-    from_json(col("json"), schema).alias("data")
-).select("data.*")
-
-# Create Iceberg table
-spark.sql("""
-    CREATE TABLE IF NOT EXISTS local.ecommerce.events (
+spark.sql("CREATE NAMESPACE IF NOT EXISTS local.ecommerce")
+spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {TABLE} (
         event_id STRING,
         user_id STRING,
         event_type STRING,
@@ -46,12 +50,10 @@ spark.sql("""
     ) USING iceberg
 """)
 
-# Kafka → Spark → Iceberg
+# Kafka -> Spark -> Iceberg
 query = parsed_df.writeStream \
     .outputMode("append") \
-    .format("iceberg") \
-    .option("path", "hdfs://localhost:9000/user/vboxuser/iceberg/events") \
-    .option("checkpointLocation", "hdfs://localhost:9000/user/vboxuser/iceberg_checkpoint") \
-    .toTable("local.ecommerce.events")
+    .option("checkpointLocation", CHECKPOINT) \
+    .toTable(TABLE)
 
 query.awaitTermination()
